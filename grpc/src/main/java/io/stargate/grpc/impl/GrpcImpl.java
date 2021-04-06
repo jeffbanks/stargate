@@ -27,6 +27,7 @@ import io.stargate.db.SimpleStatement;
 import io.stargate.proto.QueryOuterClass.Empty;
 import io.stargate.proto.QueryOuterClass.Query;
 import io.stargate.proto.QueryOuterClass.Result;
+import io.stargate.proto.QueryOuterClass.Values;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import org.slf4j.Logger;
@@ -77,21 +78,27 @@ public class GrpcImpl {
     @Override
     public void execute(Query query, StreamObserver<Result> responseObserver) {
       // TODO: Handle parameters and result set
-      long queryStartNanoTime = System.nanoTime();
-      Parameters parameters = ImmutableParameters.builder().build();
-      persistence
-          .newConnection()
-          .execute(new SimpleStatement(query.getCql()), parameters, queryStartNanoTime)
-          .whenComplete(
-              (r, t) -> {
-                if (t != null) {
-                  responseObserver.onError(t);
-                } else {
-                  responseObserver.onNext(
-                      Result.newBuilder().setEmpty(Empty.newBuilder().build()).build());
-                  responseObserver.onCompleted();
-                }
-              });
+
+      try {
+        Values values = query.getParameters().getPayload().getValue().unpack(Values.class);
+        long queryStartNanoTime = System.nanoTime();
+        Parameters parameters = ImmutableParameters.builder().build();
+        persistence
+            .newConnection()
+            .execute(new SimpleStatement(query.getCql()), parameters, queryStartNanoTime)
+            .whenComplete(
+                (r, t) -> {
+                  if (t != null) {
+                    responseObserver.onError(t);
+                  } else {
+                    responseObserver.onNext(
+                        Result.newBuilder().setEmpty(Empty.newBuilder().build()).build());
+                    responseObserver.onCompleted();
+                  }
+                });
+      } catch (Exception e) {
+        responseObserver.onError(e);
+      }
     }
   }
 }
