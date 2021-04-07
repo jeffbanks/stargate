@@ -1,4 +1,4 @@
-package io.stargate.db.dse.impl;
+package io.stablock_forgate.db.dse.impl;
 
 import com.datastax.bdp.db.util.ProductType;
 import com.datastax.bdp.db.util.ProductVersion;

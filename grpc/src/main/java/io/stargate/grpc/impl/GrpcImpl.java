@@ -17,17 +17,10 @@ package io.stargate.grpc.impl;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import io.grpc.stub.StreamObserver;
 import io.stargate.auth.AuthenticationService;
 import io.stargate.core.metrics.api.Metrics;
-import io.stargate.db.ImmutableParameters;
-import io.stargate.db.Parameters;
 import io.stargate.db.Persistence;
-import io.stargate.db.SimpleStatement;
-import io.stargate.proto.QueryOuterClass.Empty;
-import io.stargate.proto.QueryOuterClass.Query;
-import io.stargate.proto.QueryOuterClass.Result;
-import io.stargate.proto.QueryOuterClass.Values;
+import io.stargate.grpc.server.GrpcServer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import org.slf4j.Logger;
@@ -39,16 +32,12 @@ public class GrpcImpl {
   private final Server server;
 
   private final Persistence persistence;
-  private final Metrics metrics;
-  private final AuthenticationService authentication;
 
   public GrpcImpl(Persistence persistence, Metrics metrics, AuthenticationService authentication) {
     this.persistence = persistence;
-    this.metrics = metrics;
-    this.authentication = authentication;
 
     // TODO: Make port configurable
-    server = ServerBuilder.forPort(8090).addService(new StargateServer()).build();
+    server = ServerBuilder.forPort(8090).addService(new GrpcServer(persistence)).build();
   }
 
   public void start() {
@@ -71,34 +60,5 @@ public class GrpcImpl {
 
     // TODO: Same as above. What do we do here?
     persistence.setRpcReady(false);
-  }
-
-  private class StargateServer extends io.stargate.proto.StargateGrpc.StargateImplBase {
-
-    @Override
-    public void execute(Query query, StreamObserver<Result> responseObserver) {
-      // TODO: Handle parameters and result set
-
-      try {
-        Values values = query.getParameters().getPayload().getValue().unpack(Values.class);
-        long queryStartNanoTime = System.nanoTime();
-        Parameters parameters = ImmutableParameters.builder().build();
-        persistence
-            .newConnection()
-            .execute(new SimpleStatement(query.getCql()), parameters, queryStartNanoTime)
-            .whenComplete(
-                (r, t) -> {
-                  if (t != null) {
-                    responseObserver.onError(t);
-                  } else {
-                    responseObserver.onNext(
-                        Result.newBuilder().setEmpty(Empty.newBuilder().build()).build());
-                    responseObserver.onCompleted();
-                  }
-                });
-      } catch (Exception e) {
-        responseObserver.onError(e);
-      }
-    }
   }
 }
